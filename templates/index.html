@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Turn long videos into captioned vertical clips with AI.">
+  <title>ClipForge AI</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="ClipForge AI home">
+      <span class="brand-mark" aria-hidden="true"><span></span><span></span></span>
+      <span>ClipForge <em>AI</em></span>
+    </a>
+    <div class="local-pill"><span></span> Running locally</div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="eyebrow">AI-POWERED VIDEO REPURPOSING</div>
+      <h1>One video in.<br><span>Scroll-stopping clips out.</span></h1>
+      <p>Find the moments worth sharing, reframe them for vertical video, and add polished subtitles—automatically.</p>
+    </section>
+
+    <section class="workspace" aria-label="Create clips">
+      <div class="mode-tabs" role="tablist">
+        <button class="mode-tab active" type="button" role="tab" aria-selected="true" data-mode="upload">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M5 15v4h14v-4"/></svg>
+          Upload video
+        </button>
+        <button class="mode-tab" type="button" role="tab" aria-selected="false" data-mode="url">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7-7.1l-1.1 1M14 11a5 5 0 0 0-7.1-.1l-2 2a5 5 0 0 0 7 7.1l1.1-1"/></svg>
+          Paste URL
+        </button>
+      </div>
+
+      <form id="clip-form">
+        <div id="upload-panel" class="input-panel active">
+          <input id="video-input" name="video" type="file" accept="video/*" hidden>
+          <label class="dropzone" for="video-input" id="dropzone">
+            <span class="upload-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7 8m5-5 5 5M4 15v5h16v-5"/></svg>
+            </span>
+            <strong id="file-title">Drop your video here</strong>
+            <span id="file-detail">or click to browse your files</span>
+            <small>MP4, MOV, MKV, WebM, AVI or M4V · up to 4 GB</small>
+          </label>
+        </div>
+
+        <div id="url-panel" class="input-panel">
+          <label class="field-label" for="url-input">Video URL</label>
+          <div class="url-field">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7-7.1l-1.1 1M14 11a5 5 0 0 0-7.1-.1l-2 2a5 5 0 0 0 7 7.1l1.1-1"/></svg>
+            <input id="url-input" name="url" type="url" placeholder="https://youtube.com/watch?v=…">
+          </div>
+          <p class="field-help">Works with YouTube and other sites supported by yt-dlp.</p>
+        </div>
+
+        <div class="options-row">
+          <div>
+            <label class="field-label" for="max-clips">Number of clips</label>
+            <select id="max-clips" name="max_clips">
+              <option value="1">Up to 1 clip</option>
+              <option value="2">Up to 2 clips</option>
+              <option value="3" selected>Up to 3 clips</option>
+              <option value="4">Up to 4 clips</option>
+              <option value="5">Up to 5 clips</option>
+            </select>
+          </div>
+          <div class="feature-note"><span>✦</span><p><strong>Gemini finds the hooks</strong><br>Whisper transcribes · FFmpeg exports</p></div>
+        </div>
+
+        <div id="form-error" class="alert" role="alert" hidden></div>
+        <button class="primary-button" id="submit-button" type="submit">
+          <span>Create my clips</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg>
+        </button>
+      </form>
+    </section>
+
+    <section id="progress-section" class="progress-card" hidden aria-live="polite">
+      <div class="processing-orbit"><span></span></div>
+      <div>
+        <div class="eyebrow">PROCESSING LOCALLY</div>
+        <h2 id="progress-title">Preparing your video…</h2>
+        <p id="progress-message">Large videos can take several minutes. Keep this tab open.</p>
+      </div>
+      <div class="progress-track"><span></span></div>
+    </section>
+
+    <section id="results-section" class="results" hidden>
+      <div class="results-heading">
+        <div><div class="eyebrow">READY TO POST</div><h2>Your clips are ready.</h2></div>
+        <button class="secondary-button" id="new-job" type="button">Process another video</button>
+      </div>
+      <div id="results-grid" class="results-grid"></div>
+    </section>
+
+    <section class="how-it-works">
+      <article><span>01</span><div><h3>Bring the source</h3><p>Upload a file or paste a video link.</p></div></article>
+      <article><span>02</span><div><h3>AI finds the moments</h3><p>Gemini scores hooks, emotion, and shareability.</p></div></article>
+      <article><span>03</span><div><h3>Export vertical</h3><p>Get 9:16 clips with burned-in subtitles.</p></div></article>
+    </section>
+  </main>
+
+  <footer><span>Your videos stay on this computer.</span><span>Built with Gemini · Whisper · FFmpeg</span></footer>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
