@@ -1,0 +1,49 @@
+from __future__ import annotations
+
+import io
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+import web_app
+
+
+class WebAppTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.client = web_app.app.test_client()
+
+    def test_index_renders_upload_interface(self) -> None:
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Drop your video here", response.data)
+        self.assertIn(b"Paste URL", response.data)
+
+    def test_rejects_empty_submission(self) -> None:
+        response = self.client.post("/api/jobs", data={"max_clips": "3"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_rejects_unsupported_upload(self) -> None:
+        response = self.client.post(
+            "/api/jobs",
+            data={"video": (io.BytesIO(b"not video"), "notes.txt")},
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_accepts_video_and_starts_worker(self) -> None:
+        with tempfile.TemporaryDirectory() as temp, patch(
+            "web_app.UPLOADS_DIR", Path(temp)
+        ), patch("web_app.threading.Thread") as thread:
+            response = self.client.post(
+                "/api/jobs",
+                data={"max_clips": "1", "video": (io.BytesIO(b"video"), "sample.mp4")},
+                content_type="multipart/form-data",
+            )
+        self.assertEqual(response.status_code, 202)
+        self.assertIn("job_id", response.get_json())
+        thread.return_value.start.assert_called_once()
+
+
+if __name__ == "__main__":
+    unittest.main()
