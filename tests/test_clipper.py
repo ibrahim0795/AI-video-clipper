@@ -5,10 +5,15 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.clipper import create_final_clip, create_raw_clip
+from app.clipper import _encoding_args, create_final_clip, create_raw_clip
 
 
 class ClipperTests(unittest.TestCase):
+    def test_encoding_args_preserve_requested_codec(self) -> None:
+        self.assertEqual(_encoding_args("libx265")[1], "libx265")
+        self.assertEqual(_encoding_args("hevc_qsv")[1], "hevc_qsv")
+        self.assertIn("-global_quality", _encoding_args("hevc_qsv"))
+
     def test_builds_exact_vertical_ffmpeg_command(self) -> None:
         with tempfile.TemporaryDirectory() as temp, patch(
             "app.clipper.OUTPUT_DIR", Path(temp)
