@@ -31,6 +31,12 @@ class WebAppTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_rejects_invalid_media_job_directory(self) -> None:
+        with patch("web_app.send_from_directory") as send:
+            response = self.client.get("/media/not-a-job/README.md")
+        self.assertEqual(response.status_code, 404)
+        send.assert_not_called()
+
     def test_accepts_video_and_starts_worker(self) -> None:
         with tempfile.TemporaryDirectory() as temp, patch(
             "web_app.UPLOADS_DIR", Path(temp)

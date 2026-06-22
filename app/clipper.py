@@ -17,9 +17,9 @@ logger = get_logger(__name__)
 
 def _encoding_args(codec: str) -> list[str]:
     """Return quality-oriented options supported by the selected encoder."""
-    if codec == "h264_qsv":
+    if codec.endswith("_qsv"):
         return ["-c:v", codec, "-preset", "veryfast", "-global_quality", "23"]
-    return ["-c:v", VIDEO_CODEC, "-preset", VIDEO_PRESET, "-crf", str(VIDEO_CRF)]
+    return ["-c:v", codec, "-preset", VIDEO_PRESET, "-crf", str(VIDEO_CRF)]
 
 
 def _run_clip_command(command: list[str], description: str, destination: Path) -> None:
@@ -27,7 +27,7 @@ def _run_clip_command(command: list[str], description: str, destination: Path) -
     try:
         run_command(command, description)
     except RuntimeError as exc:
-        if HARDWARE_VIDEO_CODEC not in command:
+        if HARDWARE_VIDEO_CODEC == VIDEO_CODEC or HARDWARE_VIDEO_CODEC not in command:
             raise
         logger.warning("Hardware encoding unavailable; retrying on CPU: %s", exc)
         if destination.exists():

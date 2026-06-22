@@ -47,6 +47,20 @@ dropzone.addEventListener('drop', event => {
 function showError(message) { errorBox.textContent = message; errorBox.hidden = false; }
 function hideError() { errorBox.hidden = true; errorBox.textContent = ''; }
 
+async function readJsonResponse(response) {
+  const body = await response.text();
+  if (!body) return {};
+  try {
+    return JSON.parse(body);
+  } catch {
+    const plainText = body.trim().startsWith('<') ? '' : body.trim().slice(0, 240);
+    if (!response.ok) {
+      return { error: plainText || `Server request failed (${response.status} ${response.statusText})` };
+    }
+    throw new Error('The server returned an unreadable response. Check logs/web.stderr.log for details.');
+  }
+}
+
 form.addEventListener('submit', async event => {
   event.preventDefault(); hideError();
   if (activeMode === 'upload' && !fileInput.files.length) return showError('Choose a video to continue.');
@@ -60,7 +74,7 @@ form.addEventListener('submit', async event => {
   submitButton.querySelector('span').textContent = 'Uploading…';
   try {
     const response = await fetch('/api/jobs', { method: 'POST', body: data });
-    const payload = await response.json();
+    const payload = await readJsonResponse(response);
     if (!response.ok) throw new Error(payload.error || 'Could not start the job.');
     submitButton.querySelector('span').textContent = 'Processing…';
     progressSection.hidden = false;
@@ -74,7 +88,7 @@ form.addEventListener('submit', async event => {
 async function pollJob(jobId) {
   try {
     const response = await fetch(`/api/jobs/${jobId}`);
-    const job = await response.json();
+    const job = await readJsonResponse(response);
     if (!response.ok) throw new Error(job.error || 'Unable to read job status.');
     const stageTitles = {
       download: 'Getting your video…', transcribe: 'Transcribing locally…',
