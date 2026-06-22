@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 import uuid
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import Flask, abort, jsonify, render_template, request, send_from_directory
 from werkzeug.utils import secure_filename
 
 from app.config import OUTPUT_DIR, UPLOADS_DIR, ensure_directories
@@ -114,6 +115,11 @@ def get_job(job_id: str):
 
 @app.get("/media/<job_id>/<path:filename>")
 def media(job_id: str, filename: str):
+    # Pipeline job IDs are always 12 lowercase hexadecimal characters. Validate
+    # the directory component itself before handing the filename to Flask's
+    # safe send_from_directory implementation.
+    if re.fullmatch(r"[0-9a-f]{12}", job_id) is None:
+        abort(404)
     return send_from_directory(OUTPUT_DIR / job_id, filename, as_attachment=False)
 
 
