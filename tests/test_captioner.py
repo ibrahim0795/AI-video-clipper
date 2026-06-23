@@ -28,9 +28,14 @@ class SubtitleTests(unittest.TestCase):
         transcript = [{"start": 0, "end": 5, "text": "word " * 40}]
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "clip.srt"
-            generate_srt(transcript, 0, 10, path)
-            block = path.read_text(encoding="utf-8").strip().splitlines()
-        self.assertLessEqual(len(block[2:]), 2)
+            count = generate_srt(transcript, 0, 10, path)
+            blocks = path.read_text(encoding="utf-8").strip().split("\n\n")
+        self.assertGreater(count, 1)
+        self.assertTrue(all(len(block.splitlines()[2:]) <= 2 for block in blocks))
+
+    def test_rejects_invalid_clip_range(self) -> None:
+        with tempfile.TemporaryDirectory() as temp, self.assertRaises(ValueError):
+            generate_srt([], 10, 10, Path(temp) / "clip.srt")
 
     def test_burn_uses_vertical_reference_resolution(self) -> None:
         with patch("app.captioner.run_command") as run:

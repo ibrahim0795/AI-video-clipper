@@ -31,6 +31,25 @@ class WebAppTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_rejects_out_of_range_clip_count(self) -> None:
+        response = self.client.post(
+            "/api/jobs", data={"max_clips": "99", "url": "https://youtube.com/watch?v=test"}
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_web_result_does_not_expose_local_video_path(self) -> None:
+        summary = {
+            "job_id": "abcdef123456",
+            "local_video": r"C:\\private\\source.mp4",
+            "clips": [],
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            summary_path = Path(temp) / "summary.json"
+            summary_path.write_text(__import__("json").dumps(summary), encoding="utf-8")
+            with patch("web_app.run_pipeline", return_value=summary_path):
+                web_app._run_job("webjob", "https://example.com/video", 1)
+        self.assertNotIn("local_video", web_app.jobs["webjob"]["result"])
+
     def test_rejects_invalid_media_job_directory(self) -> None:
         with patch("web_app.send_from_directory") as send:
             response = self.client.get("/media/not-a-job/README.md")
