@@ -27,6 +27,7 @@ def save_metadata(job_id: str, clips: list[dict[str, Any]], transcript: list[dic
         value = {
             "title": clip["title"], "hook": clip["hook"], "caption": clip["caption"],
             "description": clip["description"], "hashtags": clip["hashtags"],
+            "selection_source": clip.get("selection_source", "unknown"),
             "transcript": transcript_excerpt(transcript, start, end),
         }
         write_json(output_dir / f"clip_{index}_metadata.json", value)

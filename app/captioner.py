@@ -17,20 +17,21 @@ logger = get_logger(__name__)
 ASS_REFERENCE_HEIGHT = 288
 
 
-def _wrap_subtitle(text: str) -> str:
+def _subtitle_chunks(text: str) -> list[str]:
+    """Split a long caption into sequential cues of at most two lines."""
     lines = textwrap.wrap(
         " ".join(text.split()), width=SUBTITLE_MAX_CHARS,
         break_long_words=False, break_on_hyphens=False,
     )
-    if len(lines) <= 2:
-        return "\n".join(lines)
-    return lines[0] + "\n" + " ".join(lines[1:])
+    return ["\n".join(lines[index : index + 2]) for index in range(0, len(lines), 2)]
 
 
 def generate_srt(
     transcript: list[dict[str, Any]], clip_start: float, clip_end: float, destination: Path
 ) -> int:
     """Write transcript segments overlapping a clip, shifted to clip-relative time."""
+    if clip_start < 0 or clip_end <= clip_start:
+        raise ValueError("Subtitle clip range must have a non-negative start and end after start")
     entries: list[str] = []
     for segment in transcript:
         start = max(float(segment["start"]), clip_start)
@@ -39,11 +40,18 @@ def generate_srt(
             continue
         relative_start = start - clip_start
         relative_end = end - clip_start
-        entries.append(
-            f"{len(entries) + 1}\n"
-            f"{format_timestamp(relative_start, srt=True)} --> {format_timestamp(relative_end, srt=True)}\n"
-            f"{_wrap_subtitle(str(segment['text']))}\n"
-        )
+        chunks = _subtitle_chunks(str(segment["text"]))
+        if not chunks:
+            continue
+        chunk_duration = (relative_end - relative_start) / len(chunks)
+        for index, chunk in enumerate(chunks):
+            cue_start = relative_start + index * chunk_duration
+            cue_end = relative_start + (index + 1) * chunk_duration
+            entries.append(
+                f"{len(entries) + 1}\n"
+                f"{format_timestamp(cue_start, srt=True)} --> {format_timestamp(cue_end, srt=True)}\n"
+                f"{chunk}\n"
+            )
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text("\n".join(entries), encoding="utf-8")
     return len(entries)
@@ -78,7 +86,8 @@ def burn_subtitles(raw_clip: Path, subtitle_path: Path, destination: Path) -> Pa
     """Burn styled subtitles into a raw vertical clip."""
     subtitle_filter = build_subtitle_filter(subtitle_path)
     run_command([
-        "ffmpeg", "-y", "-i", str(raw_clip), "-vf", subtitle_filter,
+        "ffmpeg", "-y", "-i", str(raw_clip), "-map", "0:v:0", "-map", "0:a:0?",
+        "-vf", subtitle_filter,
         "-c:v", VIDEO_CODEC, "-preset", VIDEO_PRESET, "-crf", str(VIDEO_CRF),
         "-c:a", AUDIO_CODEC, "-b:a", "192k", "-movflags", "+faststart", str(destination),
     ], f"burning subtitles into {destination.name}")

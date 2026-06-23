@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import math
+import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, Sequence
@@ -13,10 +16,40 @@ from app.logger import get_logger
 logger = get_logger(__name__)
 
 
+def resolve_media_executable(name: str) -> str | None:
+    """Resolve FFmpeg tools from PATH, configuration, or the WinGet install tree."""
+    resolved = shutil.which(name)
+    if resolved:
+        return resolved
+
+    executable = f"{name}.exe" if os.name == "nt" else name
+    configured_dir = os.getenv("FFMPEG_BIN_DIR", "").strip()
+    if configured_dir:
+        candidate = Path(configured_dir).expanduser() / executable
+        try:
+            if candidate.is_file():
+                return str(candidate)
+        except OSError:
+            logger.debug("Configured FFmpeg directory is not accessible: %s", configured_dir)
+
+    if os.name == "nt":
+        local_app_data = os.getenv("LOCALAPPDATA", "").strip()
+        if local_app_data:
+            packages = Path(local_app_data) / "Microsoft" / "WinGet" / "Packages"
+            pattern = f"Gyan.FFmpeg_*/ffmpeg-*/bin/{executable}"
+            try:
+                match = next((path for path in packages.glob(pattern) if path.is_file()), None)
+            except OSError:
+                match = None
+            if match:
+                return str(match)
+    return None
+
+
 def parse_timestamp(value: str | int | float) -> float:
     """Convert seconds or HH:MM:SS(.mmm) into seconds."""
     if isinstance(value, (int, float)):
-        if value < 0:
+        if not math.isfinite(value) or value < 0:
             raise ValueError("Timestamp cannot be negative")
         return float(value)
     text = str(value).strip()
@@ -25,7 +58,7 @@ def parse_timestamp(value: str | int | float) -> float:
     try:
         if ":" not in text:
             seconds = float(text)
-            if seconds < 0:
+            if not math.isfinite(seconds) or seconds < 0:
                 raise ValueError("Timestamp cannot be negative")
             return seconds
         parts = [float(part) for part in text.split(":")]
@@ -36,6 +69,8 @@ def parse_timestamp(value: str | int | float) -> float:
     elif len(parts) == 2:
         hours, (minutes, seconds) = 0.0, parts
     else:
+        raise ValueError(f"Invalid timestamp: {value}")
+    if not all(math.isfinite(part) for part in (hours, minutes, seconds)):
         raise ValueError(f"Invalid timestamp: {value}")
     if hours < 0 or not 0 <= minutes < 60 or not 0 <= seconds < 60:
         raise ValueError(f"Invalid timestamp: {value}")
@@ -51,6 +86,8 @@ def format_timestamp(seconds: float, srt: bool = False) -> str:
     secs, millis = divmod(remainder, 1000)
     if srt:
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+    if millis:
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}.{millis:03d}"
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
@@ -63,24 +100,29 @@ def parse_json_response(text: str) -> list[dict[str, Any]]:
     except json.JSONDecodeError:
         start, end = cleaned.find("["), cleaned.rfind("]")
         if start < 0 or end <= start:
-            raise ValueError("Gemini response did not contain a JSON array")
+            raise ValueError("AI response did not contain a JSON array")
         try:
             value = json.loads(cleaned[start : end + 1])
         except json.JSONDecodeError as exc:
-            raise ValueError("Gemini returned invalid JSON") from exc
+            raise ValueError("AI provider returned invalid JSON") from exc
     if isinstance(value, dict) and isinstance(value.get("clips"), list):
         value = value["clips"]
     if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
-        raise ValueError("Gemini response must be a JSON array of objects")
+        raise ValueError("AI response must be a JSON array of objects")
     return value
 
 
 def run_command(command: Sequence[str], description: str) -> subprocess.CompletedProcess[str]:
     """Run an external command and raise a readable error on failure."""
-    logger.debug("%s command: %s", description, subprocess.list2cmdline(list(command)))
+    resolved_command = list(command)
+    if resolved_command and resolved_command[0].lower() in {"ffmpeg", "ffprobe"}:
+        executable = resolve_media_executable(resolved_command[0].lower())
+        if executable:
+            resolved_command[0] = executable
+    logger.debug("%s command: %s", description, subprocess.list2cmdline(resolved_command))
     try:
         return subprocess.run(
-            list(command), check=True, capture_output=True, text=True, encoding="utf-8",
+            resolved_command, check=True, capture_output=True, text=True, encoding="utf-8",
             errors="replace",
         )
     except FileNotFoundError as exc:

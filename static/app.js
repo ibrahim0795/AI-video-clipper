@@ -108,11 +108,14 @@ async function pollJob(jobId) {
 
 function renderResults(result) {
   progressSection.hidden = true;
-  resultsGrid.innerHTML = result.clips.map((clip, index) => `
+  resultsGrid.innerHTML = result.clips.map((clip, index) => {
+    const fallback = clip.selection_source === 'fallback';
+    const scoreLabel = fallback ? 'FALLBACK · NOT AI-RANKED' : `AI VIRAL SCORE ${clip.viral_score}/10`;
+    return `
     <article class="clip-card">
       <video class="clip-video" controls preload="metadata" src="${clip.video_url}"></video>
       <div class="clip-content">
-        <span class="score">✦ VIRAL SCORE ${clip.viral_score}/10</span>
+        <span class="score ${fallback ? 'fallback' : ''}">✦ ${scoreLabel}</span>
         <h3>${escapeHtml(clip.title)}</h3>
         <p>${escapeHtml(clip.caption)}</p>
         <div class="clip-actions">
@@ -120,7 +123,8 @@ function renderResults(result) {
           <a href="${clip.subtitle_url}" download>Get subtitles</a>
         </div>
       </div>
-    </article>`).join('');
+    </article>`;
+  }).join('');
   resultsSection.hidden = false;
   resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
   submitButton.disabled = false; submitButton.querySelector('span').textContent = 'Create my clips';

@@ -13,9 +13,9 @@ from typing import Any, Callable
 from app.ai_detector import detect_viral_clips
 from app.captioner import burn_subtitles, generate_srt
 from app.clipper import create_final_clip, create_raw_clip
-from app.config import DEFAULT_MAX_CLIPS, OUTPUT_DIR, ensure_directories
-from app.downloader import get_video
-from app.ffmpeg_utils import check_media_tools, get_video_duration, validate_video
+from app.config import DEFAULT_MAX_CLIPS, MAX_CLIPS, MIN_CLIP_DURATION, OUTPUT_DIR, ensure_directories
+from app.downloader import get_video, safe_source_label, validate_source
+from app.ffmpeg_utils import check_media_tools, validate_video
 from app.logger import setup_logging
 from app.metadata_generator import save_metadata
 from app.transcriber import transcribe_video
@@ -44,11 +44,15 @@ def run_pipeline(
 ) -> Path:
     """Run the complete clipping pipeline and return summary.json."""
     logger = setup_logging()
+
     def progress(stage: str, message: str) -> None:
         if progress_callback:
             progress_callback(stage, message)
 
     ensure_directories()
+    if not 1 <= max_clips <= MAX_CLIPS:
+        raise ValueError(f"max_clips must be between 1 and {MAX_CLIPS}")
+    validate_source(source)
     missing = check_media_tools()
     if missing:
         raise RuntimeError(
@@ -59,19 +63,22 @@ def run_pipeline(
     job_id = uuid.uuid4().hex[:12]
     progress("download", "Loading or downloading your source video…")
     video_path, job_id = get_video(source, job_id)
-    validate_video(video_path)
-    duration = get_video_duration(video_path)
+    duration = validate_video(video_path)
     progress("transcribe", "Transcribing speech locally with Whisper…")
     transcript = transcribe_video(video_path, job_id)
-    progress("analyze", "Finding the strongest moments with Gemini…")
+    progress("analyze", "Finding the strongest moments with Groq…")
     candidates = detect_viral_clips(transcript, duration, max_clips)
     if not candidates:
-        raise RuntimeError("The video is too short to create a clip of at least 15 seconds")
+        raise RuntimeError(
+            f"The video is too short to create a clip of at least {MIN_CLIP_DURATION:.0f} seconds"
+        )
 
     completed: list[dict[str, Any]] = []
     for candidate in candidates:
         number = len(completed) + 1
         raw_path: Path | None = None
+        final_path: Path | None = None
+        subtitle_path: Path | None = None
         try:
             progress("export", f"Rendering clip {number} of {len(candidates)}…")
             output_dir = OUTPUT_DIR / job_id
@@ -93,6 +100,13 @@ def run_pipeline(
                     video_path, job_id, number, candidate["start"], candidate["end"],
                     subtitle_path if subtitle_count else None,
                 )
+            exported_duration = validate_video(final_path)
+            expected_duration = candidate["end"] - candidate["start"]
+            if exported_duration < expected_duration - 2.0:
+                raise RuntimeError(
+                    f"Exported clip is unexpectedly short ({exported_duration:.1f}s; "
+                    f"expected about {expected_duration:.1f}s)"
+                )
             record = dict(candidate)
             record.update({
                 "filename": final_path.name,
@@ -102,8 +116,16 @@ def run_pipeline(
             record.pop("start_time", None)
             record.pop("end_time", None)
             completed.append(record)
+            logger.info(
+                "Final clip %d: %s-%s (%.1fs), source=%s",
+                number, record["start"], record["end"], record["duration"],
+                record.get("selection_source", "unknown"),
+            )
         except Exception:
             logger.exception("Clip %d failed and will be skipped", number)
+            for partial in (final_path, subtitle_path):
+                if partial and partial.exists():
+                    partial.unlink()
         finally:
             if raw_path and raw_path.exists() and not keep_raw:
                 raw_path.unlink()
@@ -112,7 +134,12 @@ def run_pipeline(
         raise RuntimeError("All clip exports failed; inspect logs/app.log for FFmpeg details")
     save_metadata(job_id, completed, transcript)
     progress("finalize", "Saving metadata and preparing your downloads…")
-    summary = {"job_id": job_id, "input_video": str(video_path), "clips": completed}
+    summary = {
+        "job_id": job_id,
+        "input_video": safe_source_label(source),
+        "local_video": str(video_path),
+        "clips": completed,
+    }
     summary_path = OUTPUT_DIR / job_id / "summary.json"
     write_json(summary_path, summary)
     logger.info("Export complete: %s", summary_path.parent)
