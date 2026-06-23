@@ -14,6 +14,11 @@ def setup_logging(verbose: bool = False) -> logging.Logger:
     logger = logging.getLogger("ai_video_clipper")
     logger.setLevel(logging.DEBUG)
     if logger.handlers:
+        for handler in logger.handlers:
+            if isinstance(handler, logging.StreamHandler) and not isinstance(
+                handler, logging.FileHandler
+            ):
+                handler.setLevel(logging.DEBUG if verbose else logging.INFO)
         return logger
 
     formatter = logging.Formatter(
