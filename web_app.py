@@ -78,6 +78,11 @@ def index() -> str:
     return render_template("index.html")
 
 
+@app.get("/healthz")
+def healthz():
+    return jsonify({"status": "ok"})
+
+
 @app.post("/api/jobs")
 def create_job():
     ensure_directories()

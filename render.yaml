@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: ai-video-clipper
+    runtime: docker
+    plan: starter
+    healthCheckPath: /healthz
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: WHISPER_MODEL
+        value: tiny
+      - key: USE_BLUR_BACKGROUND
+        value: "true"
+    disk:
+      name: ai-video-clipper-output
+      mountPath: /app/output
+      sizeGB: 10
