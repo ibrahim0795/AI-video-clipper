@@ -72,6 +72,46 @@ python web_app.py
 
 Open `http://127.0.0.1:5000` to upload a video or paste a URL, follow processing status, preview finished clips, and download videos or subtitles.
 
+## Deploy backend on Render
+
+This project includes Render deployment files:
+
+- `Dockerfile` installs Python dependencies, FFmpeg, and Node.js.
+- `render.yaml` defines a Docker web service, environment variables, health check, and a persistent output disk.
+- `.dockerignore` keeps local videos, outputs, logs, virtual environments, and `.env` out of the deployed image.
+
+### Recommended Render setup
+
+1. Push this repository to GitHub.
+2. Open [Render](https://render.com/) and choose **New +** → **Blueprint**.
+3. Connect your GitHub repository.
+4. Render should detect `render.yaml`.
+5. Add the secret environment variable when Render asks:
+
+```env
+GROQ_API_KEY=your_real_groq_api_key
+```
+
+6. Keep these defaults unless you want to change them:
+
+```env
+GROQ_MODEL=llama-3.3-70b-versatile
+WHISPER_MODEL=tiny
+USE_BLUR_BACKGROUND=true
+```
+
+7. Deploy the service.
+
+The deployed app will expose the same web UI. Render will use `/healthz` as the health check endpoint.
+
+### Important Render notes
+
+- Use a paid/starter instance for real processing. Free/small services can be too slow for Whisper and FFmpeg.
+- The included persistent disk keeps exported files in `/app/output`.
+- Temporary downloads, uploads, transcripts, and logs can still be cleared when the service restarts.
+- Large direct uploads may hit platform/proxy limits. For deployment, YouTube/video URLs are usually safer than uploading huge files.
+- Video jobs are CPU-heavy and can take several minutes. The app runs one render job at a time to avoid overloading the server.
+
 ### Command line
 
 Local file:
